@@ -1,0 +1,24 @@
+# Build output
+/build/
+/out/
+*.user
+
+# JUCE fetched source (re-fetched by CMake)
+/_deps/
+
+# OS / IDE
+.vs/
+.idea/
+*.suo
+.DS_Store
+Thumbs.db
+
+# Python analysis tooling artifacts
+__pycache__/
+*.pyc
+analysis.png
+
+# Audio reference/test material — large, kept local only.
+# (Use Git LFS if you ever want these tracked.)
+*.wav
+*.mp3
