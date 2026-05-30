@@ -62,7 +62,8 @@
       "Bash(echo \"gh-rc=$?\")",
       "Bash(rm -f README.md.tmp_check)",
       "Bash(git init *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

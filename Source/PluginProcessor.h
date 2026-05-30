@@ -80,6 +80,21 @@ private:
         return std::tanh (k * x);
     }
 
+    // Valve/tube-style saturation. Gentle asymmetric soft clip: the two halves
+    // round at slightly different rates (triode-like) -> 2nd-harmonic "warmth",
+    // smoother top end than the hard diode clip. Each half is normalised so the
+    // small-signal slope is ~1 (warmth changes tone, not level). f(0)=0 => no DC.
+    // amt 0..1 blends dry->warm. This is what tames the "digital" edge.
+    static inline float tubeStage (float x, float amt) noexcept
+    {
+        if (amt <= 0.0f) return x;
+        const float kp = 1.0f + amt * 0.8f;   // positive-half drive
+        const float kn = 1.0f + amt * 1.7f;   // negative-half drive (harder)
+        const float warm = (x >= 0.0f) ? std::tanh (kp * x) / kp
+                                       : std::tanh (kn * x) / kn;
+        return x * (1.0f - amt) + warm * amt;
+    }
+
     // --- DSP state ---
     double currentSampleRate = 44100.0;
 
@@ -96,16 +111,20 @@ private:
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> toneLPF;      // tone stack low path
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> toneHPF;      // tone stack high path
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> bloatShelf;   // failing-cap low boost
+    std::array<juce::dsp::IIR::Filter<float>, kNumCh> capLeakLPF;   // "Cap Leak" dying mode dulling
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> outputDC;     // final DC blocker (safety)
 
     // Smoothed gate gain per channel.
     std::array<float, kNumCh> gateGain { 1.0f, 1.0f };
 
+    // "Sputter" dying-mode envelope follower per channel (dying-battery sag).
+    std::array<float, kNumCh> sputterEnv { 0.0f, 0.0f };
+
     // Dry copy for the mix control.
     juce::AudioBuffer<float> dryBuffer;
 
     // Smoothed params to avoid zipper noise.
-    juce::SmoothedValue<float> driveGain, biasAmt, outLevel, mixAmt, toneBlend, dyingAmt;
+    juce::SmoothedValue<float> driveGain, biasAmt, outLevel, mixAmt, toneBlend, dyingAmt, warmthAmt;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProFuzzAudioProcessor)
 };

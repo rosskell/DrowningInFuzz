@@ -7,10 +7,12 @@ namespace ParamID
     constexpr auto drive = "drive";   // Fuzz: sustain / gain
     constexpr auto tone  = "tone";    // Big Muff tone stack
     constexpr auto level = "level";   // Master volume
-    constexpr auto bias  = "bias";    // clipping asymmetry (extra)
-    constexpr auto dying = "dying";   // failing-pedal grit + low bloat (extra)
-    constexpr auto gate  = "gate";    // input noise gate (extra)
-    constexpr auto mix   = "mix";     // dry/wet (extra)
+    constexpr auto bias   = "bias";    // clipping asymmetry (extra)
+    constexpr auto dying  = "dying";   // failing-pedal amount (extra)
+    constexpr auto dymode = "dymode";  // dying flavor (Bias Drift / Sputter / Cap Leak)
+    constexpr auto warmth = "warmth";  // tube/valve warmth (extra)
+    constexpr auto gate   = "gate";    // input noise gate (extra)
+    constexpr auto mix    = "mix";     // dry/wet (extra)
 }
 
 //==============================================================================
@@ -57,10 +59,23 @@ ProFuzzAudioProcessor::createParameterLayout()
         ParameterID { ParamID::bias, 1 }, "Bias",
         NormalisableRange<float> (-1.0f, 1.0f, 0.001f), -0.12f));
 
-    // Dying: macro for the failing-pedal character that made the loved sample.
-    // Pushes bias drift (grit) and low-end bloat together. 0 = healthy pedal.
+    // Dying: amount of failing-pedal character. 0 = healthy pedal.
     params.push_back (std::make_unique<AudioParameterFloat>(
         ParameterID { ParamID::dying, 1 }, "Dying",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.35f));
+
+    // Dying Mode: which failure flavor the Dying knob applies.
+    //   Bias Drift = octave-ish grit + low bloat (the original loved sound)
+    //   Sputter    = dying-battery sag/splutter (gain ducks under sustain)
+    //   Cap Leak   = woolly, dull, blown-out lows + loss of treble definition
+    params.push_back (std::make_unique<AudioParameterChoice>(
+        ParameterID { ParamID::dymode, 1 }, "Dying Mode",
+        StringArray { "Bias Drift", "Sputter", "Cap Leak" }, 0));
+
+    // Warmth: tube/valve-style saturation blended over the fuzz. Rounds the
+    // top end and adds even harmonics to soften the "digital" character.
+    params.push_back (std::make_unique<AudioParameterFloat>(
+        ParameterID { ParamID::warmth, 1 }, "Warmth",
         NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.35f));
 
     // Gate: threshold in dB. -100 = off.
@@ -83,14 +98,17 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
 
     const auto numChannels = (juce::uint32) getTotalNumOutputChannels();
 
-    // 4x oversampling (order 2) around the two clipping stages.
+    // 8x oversampling (order 3) around the two clipping + tube stages. The extra
+    // headroom keeps the added harmonics from aliasing back down as harsh
+    // "digital" fizz -- part of the warmer, more analog character.
+    constexpr int kOSFactor = 8;
     oversampling = std::make_unique<juce::dsp::Oversampling<float>> (
-        numChannels, 2,
+        numChannels, 3,
         juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR);
     oversampling->initProcessing ((size_t) samplesPerBlock);
 
     // The clip stages + inter-stage LPFs run inside the oversampled domain.
-    const double osRate = sampleRate * 4.0;
+    const double osRate = sampleRate * (double) kOSFactor;
 
     juce::dsp::ProcessSpec specBase;
     specBase.sampleRate       = sampleRate;
@@ -99,7 +117,7 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
 
     juce::dsp::ProcessSpec specOS = specBase;
     specOS.sampleRate       = osRate;
-    specOS.maximumBlockSize = (juce::uint32) samplesPerBlock * 4;
+    specOS.maximumBlockSize = (juce::uint32) samplesPerBlock * kOSFactor;
 
     for (auto& f : inputHPF)
     {
@@ -176,6 +194,15 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
         f.reset();
     }
 
+    for (auto& f : capLeakLPF)
+    {
+        f.prepare (specBase);
+        // "Cap Leak" dying mode dulls the top; cutoff modulated in processBlock.
+        // Default wide-open (no effect when that mode/amount is zero).
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 20000.0f);
+        f.reset();
+    }
+
     for (auto& f : outputDC)
     {
         f.prepare (specBase);
@@ -186,6 +213,7 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
     }
 
     gateGain.fill (1.0f);
+    sputterEnv.fill (0.0f);
 
     const double ramp = 0.02; // 20 ms smoothing
     driveGain.reset (sampleRate, ramp);
@@ -194,6 +222,7 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
     mixAmt.reset    (sampleRate, ramp);
     toneBlend.reset (sampleRate, ramp);
     dyingAmt.reset  (sampleRate, ramp);
+    warmthAmt.reset (sampleRate, ramp);
 
     dryBuffer.setSize ((int) numChannels, samplesPerBlock);
 }
@@ -237,17 +266,40 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     const float dying = apvts.getRawParameterValue (ParamID::dying)->load();
     dyingAmt.setTargetValue (dying);
+    warmthAmt.setTargetValue (apvts.getRawParameterValue (ParamID::warmth)->load());
 
-    // Dying pushes the clipping further off-centre (more octave grit) on top of
-    // the user Bias setting.
     const float baseBias = apvts.getRawParameterValue (ParamID::bias)->load();
-    biasAmt.setTargetValue ((baseBias - dying * 0.25f) * 0.5f);
+    const int   dyMode   = (int) apvts.getRawParameterValue (ParamID::dymode)->load();
 
-    // Dying opens the low-shelf bloat: 0 dB (healthy) .. +9 dB (failing cap).
-    const float bloatDb = dying * 9.0f;
+    // Each dying flavor maps the Dying knob to a different mix of: extra bias
+    // (grit), low-shelf bloat, top-end dulling (Cap Leak), and sag (Sputter).
+    float biasExtra = 0.0f, bloatDb = 0.0f, capLeakHz = 20000.0f;
+    float sputterDepth = 0.0f;
+    switch (dyMode)
+    {
+        case 1: // Sputter — dying-battery sag/splutter
+            biasExtra    = -dying * 0.12f;
+            bloatDb      =  dying * 4.0f;
+            sputterDepth =  dying;
+            break;
+        case 2: // Cap Leak — woolly, dull, blown lows + lost treble
+            bloatDb   = dying * 12.0f;
+            capLeakHz = juce::jmap (dying, 0.0f, 1.0f, 20000.0f, 1800.0f);
+            break;
+        default: // 0 = Bias Drift — octave grit + bloat (the original sound)
+            biasExtra = -dying * 0.25f;
+            bloatDb   =  dying * 9.0f;
+            break;
+    }
+    biasAmt.setTargetValue ((baseBias + biasExtra) * 0.5f);
+
     for (auto& f : bloatShelf)
         f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowShelf (
             currentSampleRate, 180.0f, 0.7f, juce::Decibels::decibelsToGain (bloatDb));
+
+    for (auto& f : capLeakLPF)
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (
+            currentSampleRate, capLeakHz);
 
     const float gateThrDb = apvts.getRawParameterValue (ParamID::gate)->load();
     const float gateThr   = juce::Decibels::decibelsToGain (gateThrDb);
@@ -299,10 +351,12 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         auto& l2 = interLPF2[(size_t) ch];
         auto& h2 = interHPF2[(size_t) ch];
         auto  bv = biasAmt;
+        auto  wv = warmthAmt;
 
         for (int n = 0; n < osSamples; ++n)
         {
             const float b = bv.getNextValue();
+            const float w = wv.getNextValue();
             float s = d[n];
             s = clipStage (s, b);     // stage 1
             s = l1.processSample (s); // inter-stage LPF 1
@@ -310,10 +364,12 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             s = clipStage (s, b);     // stage 2
             s = l2.processSample (s); // inter-stage LPF 2
             s = h2.processSample (s); // coupling cap 2 (DC block)
+            s = tubeStage (s, w);     // valve warmth (DC-safe, soft top)
             d[n] = s;
         }
     }
-    biasAmt.skip (osSamples);   // advance master smoother (see driveGain note)
+    biasAmt.skip   (osSamples);   // advance master smoothers (see driveGain note)
+    warmthAmt.skip (osSamples);
 
     oversampling->processSamplesDown (block);
 
@@ -335,6 +391,40 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
     toneBlend.skip (numSamples);   // advance master smoother (see driveGain note)
+
+    // --- Dying-mode post FX (Cap Leak dulling + Sputter sag) ---
+    // Both are multiplicative / low-pass only, so silence stays silent (the
+    // motorboating lesson): no source can inject energy with no input.
+    if (dyMode == 2 && capLeakHz < 19000.0f)
+    {
+        for (int ch = 0; ch < numCh && ch < kNumCh; ++ch)
+        {
+            auto* x = buffer.getWritePointer (ch);
+            auto& lp = capLeakLPF[(size_t) ch];
+            for (int n = 0; n < numSamples; ++n)
+                x[n] = lp.processSample (x[n]);
+        }
+    }
+    if (dyMode == 1 && sputterDepth > 0.0f)
+    {
+        // Dying-battery sag: a slow envelope ducks the gain under sustain, so
+        // notes bloom then choke and splutter. env -> 0 on silence => gain -> 1.
+        const float atk = 1.0f - std::exp (-1.0f / (0.005f * (float) currentSampleRate));
+        const float rel = 1.0f - std::exp (-1.0f / (0.180f * (float) currentSampleRate));
+        for (int ch = 0; ch < numCh && ch < kNumCh; ++ch)
+        {
+            auto* x = buffer.getWritePointer (ch);
+            float env = sputterEnv[(size_t) ch];
+            for (int n = 0; n < numSamples; ++n)
+            {
+                const float a = std::abs (x[n]);
+                env += (a > env ? atk : rel) * (a - env);
+                const float sag = sputterDepth * env * 6.0f;
+                x[n] *= 1.0f / (1.0f + sag);
+            }
+            sputterEnv[(size_t) ch] = env;
+        }
+    }
 
     // --- Master volume + dry/wet mix ---
     for (int ch = 0; ch < numCh; ++ch)

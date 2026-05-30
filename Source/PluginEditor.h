@@ -27,6 +27,7 @@ public:
 
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ComboAttachment  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     // One labelled rotary knob.
     struct Knob
@@ -42,7 +43,12 @@ private:
     ProFuzzAudioProcessor& processor;
     ProFuzzLookAndFeel laf;
 
-    Knob drive, bias, tone, level, gate, mix, dying;
+    Knob drive, bias, tone, level, gate, mix, dying, warmth;
+
+    // Dying-flavor selector.
+    juce::ComboBox dyModeBox;
+    juce::Label    dyModeLabel;
+    std::unique_ptr<ComboAttachment> dyModeAttach;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProFuzzAudioProcessorEditor)
 };

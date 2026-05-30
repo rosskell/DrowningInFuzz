@@ -118,12 +118,28 @@ ProFuzzAudioProcessorEditor::ProFuzzAudioProcessorEditor (ProFuzzAudioProcessor&
     setupKnob (drive, "drive", "FUZZ",   true);
 
     // Extras (small knobs).
-    setupKnob (dying, "dying", "Dying", false);
-    setupKnob (bias,  "bias",  "Bias",  false);
-    setupKnob (gate,  "gate",  "Gate",  false);
-    setupKnob (mix,   "mix",   "Mix",   false);
+    setupKnob (dying,  "dying",  "Dying",  false);
+    setupKnob (warmth, "warmth", "Warmth", false);
+    setupKnob (bias,   "bias",   "Bias",   false);
+    setupKnob (gate,   "gate",   "Gate",   false);
+    setupKnob (mix,    "mix",    "Mix",    false);
 
-    setSize (380, 600);
+    // Dying-flavor selector (combo box).
+    dyModeBox.addItemList ({ "Bias Drift", "Sputter", "Cap Leak" }, 1);
+    dyModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2a1d40));
+    dyModeBox.setColour (juce::ComboBox::textColourId,       PF::textWorn);
+    dyModeBox.setColour (juce::ComboBox::outlineColourId,    PF::goldDull.withAlpha (0.6f));
+    dyModeBox.setColour (juce::ComboBox::arrowColourId,      PF::goldDull);
+    addAndMakeVisible (dyModeBox);
+    dyModeAttach = std::make_unique<ComboAttachment> (processor.apvts, "dymode", dyModeBox);
+
+    dyModeLabel.setText ("DYING MODE", juce::dontSendNotification);
+    dyModeLabel.setJustificationType (juce::Justification::centred);
+    dyModeLabel.setFont (juce::Font (11.0f, juce::Font::bold));
+    dyModeLabel.setColour (juce::Label::textColourId, PF::textWorn);
+    addAndMakeVisible (dyModeLabel);
+
+    setSize (380, 660);
 }
 
 ProFuzzAudioProcessorEditor::~ProFuzzAudioProcessorEditor()
@@ -265,11 +281,11 @@ void ProFuzzAudioProcessorEditor::paint (juce::Graphics& g)
     // big "Pro Fuzz" wordmark + CLASSIC (slightly worn white)
     g.setColour (PF::textWorn);
     g.setFont (juce::Font (46.0f, juce::Font::bold | juce::Font::italic));
-    g.drawText ("Pro Fuzz", juce::Rectangle<int> (0, 470, getWidth(), 52),
+    g.drawText ("Pro Fuzz", juce::Rectangle<int> (0, 506, getWidth(), 52),
                 juce::Justification::centred, false);
     g.setColour (PF::goldDull);
     g.setFont (juce::Font (16.0f, juce::Font::bold));
-    g.drawText ("CLASSIC", juce::Rectangle<int> (0, 516, getWidth() - 44, 20),
+    g.drawText ("CLASSIC", juce::Rectangle<int> (0, 552, getWidth() - 44, 20),
                 juce::Justification::centredRight, false);
 
     // a worn scuff right across the wordmark (paint rubbed off from handling)
@@ -278,7 +294,7 @@ void ProFuzzAudioProcessorEditor::paint (juce::Graphics& g)
         g.setColour (PF::purpleTop.withAlpha (0.25f));
         for (int i = 0; i < 4; ++i)
         {
-            const float yy = 478.0f + rng.nextFloat() * 40.0f;
+            const float yy = 514.0f + rng.nextFloat() * 40.0f;
             g.drawLine (60.0f + rng.nextFloat() * 40.0f, yy,
                         W - 60.0f - rng.nextFloat() * 40.0f, yy + (rng.nextFloat() - 0.5f) * 6.0f,
                         1.0f + rng.nextFloat() * 1.5f);
@@ -332,7 +348,12 @@ void ProFuzzAudioProcessorEditor::resized()
     place (drive, 3*W/4, 140, 96, 18);   // FUZZ
     place (tone,  W/2,   275, 96, 18);   // TONE
 
-    Knob* ex[] = { &dying, &bias, &gate, &mix };
-    for (int i = 0; i < 4; ++i)
-        place (*ex[i], (int) ((i + 0.5f) * (W / 4.0f)), 405, 52, 14);
+    // five small extras across one row
+    Knob* ex[] = { &dying, &warmth, &bias, &gate, &mix };
+    for (int i = 0; i < 5; ++i)
+        place (*ex[i], (int) ((i + 0.5f) * (W / 5.0f)), 400, 46, 13);
+
+    // dying-mode selector centered below the extras
+    dyModeLabel.setBounds (W/2 - 90, 432, 180, 14);
+    dyModeBox.setBounds   (W/2 - 80, 448, 160, 24);
 }
