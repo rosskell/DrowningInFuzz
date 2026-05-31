@@ -39,6 +39,7 @@ public:
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboAttachment  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
     // One labelled rotary knob.
     struct Knob
@@ -54,15 +55,20 @@ private:
     ProFuzzAudioProcessor& processor;
     ProFuzzLookAndFeel laf;
 
-    Knob drive, bias, tone, level, gate, mix, dying, warmth;
+    Knob input, drive, bias, tone, level, gate, mix, dying, warmth;
 
-    // Dying-flavor selector.
+    // Mode selectors.
     juce::ComboBox dyModeBox;
     juce::Label    dyModeLabel;
     std::unique_ptr<ComboAttachment> dyModeAttach;
+    juce::ComboBox cabModeBox;
+    juce::Label    cabModeLabel;
+    std::unique_ptr<ComboAttachment> cabModeAttach;
+
+    juce::ToggleButton autoLevelButton;
+    std::unique_ptr<ButtonAttachment> autoLevelAttach;
 
     // Mk I / Mk II voicing selector.
-    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     VoicingSwitch footSw;
     std::unique_ptr<ButtonAttachment> footAttach;
 

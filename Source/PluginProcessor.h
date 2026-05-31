@@ -104,6 +104,8 @@ private:
     double osRateHz          = 44100.0 * 8.0; // oversampled rate (for voicing)
     int    lastVoicing       = -1;            // forces filter refresh on change
     int    currentProgram    = 0;
+    int    lastCabMode       = -1;
+    float  lastToneForScoop  = std::numeric_limits<float>::quiet_NaN();
     float  lastBloatDb       = std::numeric_limits<float>::quiet_NaN();
     float  lastCapLeakHz     = std::numeric_limits<float>::quiet_NaN();
 
@@ -119,8 +121,12 @@ private:
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> interHPF2;    // coupling cap (DC block) after clip 2
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> toneLPF;      // tone stack low path
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> toneHPF;      // tone stack high path
+    std::array<juce::dsp::IIR::Filter<float>, kNumCh> toneScoop;    // moving mid scoop
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> bloatShelf;   // failing-cap low boost
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> capLeakLPF;   // "Cap Leak" dying mode dulling
+    std::array<juce::dsp::IIR::Filter<float>, kNumCh> cabHPF;       // direct-recording tame
+    std::array<juce::dsp::IIR::Filter<float>, kNumCh> cabPeak;
+    std::array<juce::dsp::IIR::Filter<float>, kNumCh> cabLPF;
     std::array<juce::dsp::IIR::Filter<float>, kNumCh> outputDC;     // final DC blocker (safety)
 
     // Smoothed gate gain per channel.
@@ -133,7 +139,7 @@ private:
     juce::AudioBuffer<float> dryBuffer;
 
     // Smoothed params to avoid zipper noise.
-    juce::SmoothedValue<float> driveGain, biasAmt, outLevel, mixAmt, toneBlend, dyingAmt, warmthAmt;
+    juce::SmoothedValue<float> inputGain, driveGain, biasAmt, outLevel, mixAmt, toneBlend, dyingAmt, warmthAmt;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProFuzzAudioProcessor)
 };

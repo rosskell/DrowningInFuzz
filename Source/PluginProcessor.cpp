@@ -4,6 +4,7 @@
 //==============================================================================
 namespace ParamID
 {
+    constexpr auto input = "input";   // input trim before the circuit
     constexpr auto drive = "drive";   // Fuzz: sustain / gain
     constexpr auto tone  = "tone";    // Big Muff tone stack
     constexpr auto level = "level";   // Master volume
@@ -13,6 +14,8 @@ namespace ParamID
     constexpr auto warmth = "warmth";  // tube/valve warmth (extra)
     constexpr auto gate   = "gate";    // input noise gate (extra)
     constexpr auto mix    = "mix";     // dry/wet (extra)
+    constexpr auto cabmode= "cabmode"; // post-fuzz direct/cab tame
+    constexpr auto autolevel = "autolevel"; // level compensation
     constexpr auto voicing= "voicing"; // Mk I (orig) vs Mk II (closer to real)
 }
 
@@ -21,6 +24,7 @@ namespace
     struct FactoryPreset
     {
         const char* name;
+        float input;
         float drive;
         float tone;
         float level;
@@ -30,18 +34,20 @@ namespace
         float gate;
         float mix;
         int dyMode;
+        int cabMode;
+        bool autoLevel;
         bool voicing;
     };
 
     constexpr std::array<FactoryPreset, 8> kFactoryPresets {{
-        { "Drowning in Fuzz", 65.0f, 0.90f, -6.0f, -0.12f, 0.35f, 0.35f, -100.0f, 1.00f, 0, false },
-        { "Battery Sink",     78.0f, 0.72f, -7.5f, -0.28f, 0.72f, 0.28f,  -78.0f, 1.00f, 0, true  },
-        { "Wool Blanket",     60.0f, 0.22f, -5.0f, -0.08f, 0.82f, 0.45f, -100.0f, 1.00f, 2, true  },
-        { "Broken Speaker",   88.0f, 0.64f, -9.0f, -0.34f, 0.88f, 0.18f,  -72.0f, 1.00f, 1, false },
-        { "Tight Lead",       72.0f, 0.82f, -4.5f, -0.06f, 0.18f, 0.22f,  -68.0f, 1.00f, 1, true  },
-        { "Doom Bloom",       82.0f, 0.36f, -8.5f, -0.18f, 0.62f, 0.52f,  -92.0f, 1.00f, 0, true  },
-        { "Dry Rot Mix",      70.0f, 0.70f, -5.5f, -0.16f, 0.50f, 0.35f,  -82.0f, 0.58f, 0, false },
-        { "Mk I Bright",      58.0f, 0.96f, -6.0f,  0.00f, 0.00f, 0.12f, -100.0f, 1.00f, 0, false },
+        { "Drowning in Fuzz",  0.0f, 65.0f, 0.90f, -6.0f, -0.12f, 0.35f, 0.35f, -100.0f, 1.00f, 0, 1, true,  false },
+        { "Battery Sink",      2.0f, 78.0f, 0.72f, -7.5f, -0.28f, 0.72f, 0.28f,  -78.0f, 1.00f, 0, 1, true,  true  },
+        { "Wool Blanket",     -1.5f, 60.0f, 0.22f, -5.0f, -0.08f, 0.82f, 0.45f, -100.0f, 1.00f, 2, 2, true,  true  },
+        { "Broken Speaker",    4.0f, 88.0f, 0.64f, -9.0f, -0.34f, 0.88f, 0.18f,  -72.0f, 1.00f, 1, 2, true,  false },
+        { "Tight Lead",       -2.0f, 72.0f, 0.82f, -4.5f, -0.06f, 0.18f, 0.22f,  -68.0f, 1.00f, 1, 1, true,  true  },
+        { "Doom Bloom",        1.0f, 82.0f, 0.36f, -8.5f, -0.18f, 0.62f, 0.52f,  -92.0f, 1.00f, 0, 2, true,  true  },
+        { "Dry Rot Mix",       0.0f, 70.0f, 0.70f, -5.5f, -0.16f, 0.50f, 0.35f,  -82.0f, 0.58f, 0, 1, true,  false },
+        { "Mk I Bright",      -3.0f, 58.0f, 0.96f, -6.0f,  0.00f, 0.00f, 0.12f, -100.0f, 1.00f, 0, 0, false, false },
     }};
 
     void setParameterValue (juce::AudioProcessorValueTreeState& state,
@@ -70,6 +76,11 @@ ProFuzzAudioProcessor::createParameterLayout()
     std::vector<std::unique_ptr<RangedAudioParameter>> params;
 
     // --- The three core fuzz controls ---
+
+    // Input: pickup/reamp level trim before the circuit.
+    params.push_back (std::make_unique<AudioParameterFloat>(
+        ParameterID { ParamID::input, 1 }, "Input",
+        NormalisableRange<float> (-18.0f, 18.0f, 0.1f), 0.0f));
 
     // Fuzz: 0..100 -> input gain into the first clip stage. The Big Muff lives
     // deep in clipping, so even moderate settings are very saturated.
@@ -126,6 +137,15 @@ ProFuzzAudioProcessor::createParameterLayout()
         ParameterID { ParamID::mix, 1 }, "Mix",
         NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
 
+    // Cab Mode: a lightweight direct-recording tame after the fuzz.
+    params.push_back (std::make_unique<AudioParameterChoice>(
+        ParameterID { ParamID::cabmode, 1 }, "Cab Mode",
+        StringArray { "Raw", "Amp", "Dark Cab" }, 1));
+
+    // Auto Level: compensates some drive/input loudness jumps while browsing.
+    params.push_back (std::make_unique<AudioParameterBool>(
+        ParameterID { ParamID::autolevel, 1 }, "Auto Level", true));
+
     // Voicing footswitch: false = Mk I (the original bright voice you dialed in),
     // true = Mk II (re-tuned by spectral match to sound closer to the real pedal:
     // darker top, tighter lows, fuller mids).
@@ -154,6 +174,7 @@ void ProFuzzAudioProcessor::setCurrentProgram (int index)
     currentProgram = index;
     const auto& p = kFactoryPresets[(size_t) index];
 
+    setParameterValue (apvts, ParamID::input,   p.input);
     setParameterValue (apvts, ParamID::drive,   p.drive);
     setParameterValue (apvts, ParamID::tone,    p.tone);
     setParameterValue (apvts, ParamID::level,   p.level);
@@ -163,6 +184,8 @@ void ProFuzzAudioProcessor::setCurrentProgram (int index)
     setParameterValue (apvts, ParamID::warmth,  p.warmth);
     setParameterValue (apvts, ParamID::gate,    p.gate);
     setParameterValue (apvts, ParamID::mix,     p.mix);
+    setParameterValue (apvts, ParamID::cabmode, (float) p.cabMode);
+    setParameterValue (apvts, ParamID::autolevel, p.autoLevel ? 1.0f : 0.0f);
     setParameterValue (apvts, ParamID::voicing, p.voicing ? 1.0f : 0.0f);
 }
 
@@ -268,6 +291,14 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
         f.reset();
     }
 
+    for (auto& f : toneScoop)
+    {
+        f.prepare (specBase);
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makePeakFilter (
+            sampleRate, 850.0f, 0.65f, juce::Decibels::decibelsToGain (-5.0f));
+        f.reset();
+    }
+
     for (auto& f : bloatShelf)
     {
         f.prepare (specBase);
@@ -286,6 +317,25 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
         f.reset();
     }
 
+    for (auto& f : cabHPF)
+    {
+        f.prepare (specBase);
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeFirstOrderHighPass (sampleRate, 20.0f);
+        f.reset();
+    }
+    for (auto& f : cabPeak)
+    {
+        f.prepare (specBase);
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makePeakFilter (sampleRate, 1000.0f, 0.8f, 1.0f);
+        f.reset();
+    }
+    for (auto& f : cabLPF)
+    {
+        f.prepare (specBase);
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 20000.0f);
+        f.reset();
+    }
+
     for (auto& f : outputDC)
     {
         f.prepare (specBase);
@@ -298,6 +348,8 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
     // Apply the current voicing's cutoffs (overrides the Mk I defaults above).
     osRateHz    = osRate;
     lastVoicing = -1;
+    lastCabMode = -1;
+    lastToneForScoop = std::numeric_limits<float>::quiet_NaN();
     lastBloatDb = std::numeric_limits<float>::quiet_NaN();
     lastCapLeakHz = std::numeric_limits<float>::quiet_NaN();
     applyVoicing ((int) apvts.getRawParameterValue (ParamID::voicing)->load());
@@ -306,13 +358,14 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
     sputterEnv.fill (0.0f);
 
     const double ramp = 0.02; // 20 ms smoothing
+    inputGain.reset (sampleRate, ramp);
     driveGain.reset (sampleRate, ramp);
-    biasAmt.reset   (sampleRate, ramp);
+    biasAmt.reset   (osRate, ramp);
     outLevel.reset  (sampleRate, ramp);
     mixAmt.reset    (sampleRate, ramp);
     toneBlend.reset (sampleRate, ramp);
     dyingAmt.reset  (sampleRate, ramp);
-    warmthAmt.reset (sampleRate, ramp);
+    warmthAmt.reset (osRate, ramp);
 
     dryBuffer.setSize ((int) numChannels, samplesPerBlock);
 }
@@ -374,23 +427,35 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         buffer.clear (ch, 0, numSamples);
 
     // --- Read & smooth parameters ---
+    const float inputDb = apvts.getRawParameterValue (ParamID::input)->load();
+    inputGain.setTargetValue (juce::Decibels::decibelsToGain (inputDb));
+
     const float driveDb = juce::jmap (apvts.getRawParameterValue (ParamID::drive)->load(),
                                       0.0f, 100.0f, 0.0f, 40.0f);
     driveGain.setTargetValue (juce::Decibels::decibelsToGain (driveDb));
-    outLevel.setTargetValue (juce::Decibels::decibelsToGain (
-        apvts.getRawParameterValue (ParamID::level)->load()));
     mixAmt.setTargetValue (apvts.getRawParameterValue (ParamID::mix)->load());
-    toneBlend.setTargetValue (apvts.getRawParameterValue (ParamID::tone)->load());
+    const float tone = apvts.getRawParameterValue (ParamID::tone)->load();
+    toneBlend.setTargetValue (tone);
 
     const float dying = apvts.getRawParameterValue (ParamID::dying)->load();
     dyingAmt.setTargetValue (dying);
-    warmthAmt.setTargetValue (apvts.getRawParameterValue (ParamID::warmth)->load());
+    const float warmth = apvts.getRawParameterValue (ParamID::warmth)->load();
+    warmthAmt.setTargetValue (warmth);
+
+    const bool autoLevelOn = apvts.getRawParameterValue (ParamID::autolevel)->load() >= 0.5f;
+    const float autoCompDb = autoLevelOn
+        ? -juce::jlimit (0.0f, 10.0f, driveDb * 0.10f + juce::jmax (0.0f, inputDb) * 0.35f
+                                      + dying * 2.5f + warmth * 1.5f)
+        : 0.0f;
+    outLevel.setTargetValue (juce::Decibels::decibelsToGain (
+        apvts.getRawParameterValue (ParamID::level)->load() + autoCompDb));
 
     // Voicing footswitch: refresh filter cutoffs only when it changes.
     applyVoicing ((int) apvts.getRawParameterValue (ParamID::voicing)->load());
 
     const float baseBias = apvts.getRawParameterValue (ParamID::bias)->load();
     const int   dyMode   = (int) apvts.getRawParameterValue (ParamID::dymode)->load();
+    const int   cabMode  = (int) apvts.getRawParameterValue (ParamID::cabmode)->load();
 
     // Each dying flavor maps the Dying knob to a different mix of: extra bias
     // (grit), low-shelf bloat, top-end dulling (Cap Leak), and sag (Sputter).
@@ -434,11 +499,49 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 currentSampleRate, capLeakHz);
     }
 
+    if (std::isnan (lastToneForScoop) || std::abs (tone - lastToneForScoop) >= 0.02f)
+    {
+        lastToneForScoop = tone;
+        const float scoopHz = juce::jmap (tone, 0.0f, 1.0f, 650.0f, 1150.0f);
+        const float scoopDb = juce::jmap (tone, 0.0f, 1.0f, -3.0f, -8.0f);
+        for (auto& f : toneScoop)
+            f.coefficients = juce::dsp::IIR::Coefficients<float>::makePeakFilter (
+                currentSampleRate, scoopHz, 0.72f, juce::Decibels::decibelsToGain (scoopDb));
+    }
+
+    if (cabMode != lastCabMode)
+    {
+        lastCabMode = cabMode;
+
+        const float hpHz = (cabMode == 2) ? 95.0f : 80.0f;
+        const float lpHz = (cabMode == 2) ? 3900.0f : 6500.0f;
+        const float midHz = (cabMode == 2) ? 850.0f : 1250.0f;
+        const float midDb = (cabMode == 2) ? -4.5f : -2.0f;
+
+        for (auto& f : cabHPF)
+            f.coefficients = juce::dsp::IIR::Coefficients<float>::makeFirstOrderHighPass (currentSampleRate, hpHz);
+        for (auto& f : cabPeak)
+            f.coefficients = juce::dsp::IIR::Coefficients<float>::makePeakFilter (
+                currentSampleRate, midHz, 0.8f, juce::Decibels::decibelsToGain (midDb));
+        for (auto& f : cabLPF)
+            f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, lpHz);
+    }
+
     const float gateThrDb = apvts.getRawParameterValue (ParamID::gate)->load();
     const float gateThr   = juce::Decibels::decibelsToGain (gateThrDb);
 
     // --- Stash dry signal for the mix control ---
     dryBuffer.makeCopyOf (buffer, true);
+
+    // --- Pickup/reamp level trim before the fuzz circuit ---
+    for (int ch = 0; ch < numCh && ch < kNumCh; ++ch)
+    {
+        auto* x = buffer.getWritePointer (ch);
+        auto ig = inputGain;
+        for (int n = 0; n < numSamples; ++n)
+            x[n] *= ig.getNextValue();
+    }
+    inputGain.skip (numSamples);
 
     // --- Input noise gate (per channel, smoothed gain) ---
     const float gateRelease = 0.9995f; // close slowly to avoid chatter
@@ -512,6 +615,7 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         auto* x = buffer.getWritePointer (ch);
         auto& lp = toneLPF[(size_t) ch];
         auto& hp = toneHPF[(size_t) ch];
+        auto& sc = toneScoop[(size_t) ch];
         auto& bs = bloatShelf[(size_t) ch];
         auto tb = toneBlend;
         for (int n = 0; n < numSamples; ++n)
@@ -519,8 +623,9 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             const float t    = tb.getNextValue();
             const float low  = lp.processSample (x[n]);
             const float high = hp.processSample (x[n]);
-            // Tone-stack crossfade, then failing-cap low bloat (Dying knob).
-            x[n] = bs.processSample (low * (1.0f - t) + high * t);
+            // Tone-stack crossfade with a moving mid scoop, then failing-cap
+            // low bloat (Dying knob).
+            x[n] = bs.processSample (sc.processSample (low * (1.0f - t) + high * t));
         }
     }
     toneBlend.skip (numSamples);   // advance master smoother (see driveGain note)
@@ -542,8 +647,9 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         // Dying-battery sag: a slow envelope ducks the gain under sustain, so
         // notes bloom then choke and splutter. env -> 0 on silence => gain -> 1.
-        const float atk = 1.0f - std::exp (-1.0f / (0.005f * (float) currentSampleRate));
+        const float atk = 1.0f - std::exp (-1.0f / (0.012f * (float) currentSampleRate));
         const float rel = 1.0f - std::exp (-1.0f / (0.180f * (float) currentSampleRate));
+        const float sagThreshold = 0.035f;
         for (int ch = 0; ch < numCh && ch < kNumCh; ++ch)
         {
             auto* x = buffer.getWritePointer (ch);
@@ -552,10 +658,24 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             {
                 const float a = std::abs (x[n]);
                 env += (a > env ? atk : rel) * (a - env);
-                const float sag = sputterDepth * env * 6.0f;
+                const float sag = sputterDepth * juce::jmax (0.0f, env - sagThreshold) * 8.0f;
                 x[n] *= 1.0f / (1.0f + sag);
             }
             sputterEnv[(size_t) ch] = env;
+        }
+    }
+
+    // --- Direct-recording cab/amp tame ---
+    if (cabMode > 0)
+    {
+        for (int ch = 0; ch < numCh && ch < kNumCh; ++ch)
+        {
+            auto* x = buffer.getWritePointer (ch);
+            auto& hp = cabHPF[(size_t) ch];
+            auto& pk = cabPeak[(size_t) ch];
+            auto& lp = cabLPF[(size_t) ch];
+            for (int n = 0; n < numSamples; ++n)
+                x[n] = lp.processSample (pk.processSample (hp.processSample (x[n])));
         }
     }
 

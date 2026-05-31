@@ -160,6 +160,7 @@ ProFuzzAudioProcessorEditor::ProFuzzAudioProcessorEditor (ProFuzzAudioProcessor&
     setupKnob (drive, "drive", "FUZZ",   true);
 
     // Extras (small knobs).
+    setupKnob (input,  "input",  "Input",  false);
     setupKnob (dying,  "dying",  "Dying",  false);
     setupKnob (warmth, "warmth", "Warmth", false);
     setupKnob (bias,   "bias",   "Bias",   false);
@@ -180,6 +181,26 @@ ProFuzzAudioProcessorEditor::ProFuzzAudioProcessorEditor (ProFuzzAudioProcessor&
     dyModeLabel.setFont (juce::Font (11.0f, juce::Font::bold));
     dyModeLabel.setColour (juce::Label::textColourId, PF::textWorn);
     addAndMakeVisible (dyModeLabel);
+
+    // Direct-recording cab/amp tame selector.
+    cabModeBox.addItemList ({ "Raw", "Amp", "Dark Cab" }, 1);
+    cabModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2a1d40));
+    cabModeBox.setColour (juce::ComboBox::textColourId,       PF::textWorn);
+    cabModeBox.setColour (juce::ComboBox::outlineColourId,    PF::goldDull.withAlpha (0.6f));
+    cabModeBox.setColour (juce::ComboBox::arrowColourId,      PF::goldDull);
+    addAndMakeVisible (cabModeBox);
+    cabModeAttach = std::make_unique<ComboAttachment> (processor.apvts, "cabmode", cabModeBox);
+
+    cabModeLabel.setText ("CAB", juce::dontSendNotification);
+    cabModeLabel.setJustificationType (juce::Justification::centred);
+    cabModeLabel.setFont (juce::Font (11.0f, juce::Font::bold));
+    cabModeLabel.setColour (juce::Label::textColourId, PF::textWorn);
+    addAndMakeVisible (cabModeLabel);
+
+    autoLevelButton.setButtonText ("AUTO LEVEL");
+    autoLevelButton.setColour (juce::ToggleButton::textColourId, PF::textWorn);
+    addAndMakeVisible (autoLevelButton);
+    autoLevelAttach = std::make_unique<ButtonAttachment> (processor.apvts, "autolevel", autoLevelButton);
 
     // Mk I / Mk II voicing footswitch.
     addAndMakeVisible (footSw);
@@ -387,14 +408,17 @@ void ProFuzzAudioProcessorEditor::resized()
     place (drive, 3*W/4, 140, 96, 18);   // FUZZ
     place (tone,  W/2,   275, 96, 18);   // TONE
 
-    // five small extras across one row
-    Knob* ex[] = { &dying, &warmth, &bias, &gate, &mix };
-    for (int i = 0; i < 5; ++i)
-        place (*ex[i], (int) ((i + 0.5f) * (W / 5.0f)), 400, 46, 13);
+    // six small extras across one row
+    Knob* ex[] = { &input, &dying, &warmth, &bias, &gate, &mix };
+    for (int i = 0; i < 6; ++i)
+        place (*ex[i], (int) ((i + 0.5f) * (W / 6.0f)), 400, 44, 13);
 
-    // dying-mode selector centered below the extras (clear of the knob value boxes)
-    dyModeLabel.setBounds (W/2 - 90, 460, 180, 14);
-    dyModeBox.setBounds   (W/2 - 80, 476, 160, 24);
+    // mode selectors centered below the extras (clear of the knob value boxes)
+    dyModeLabel.setBounds (28, 460, 150, 14);
+    dyModeBox.setBounds   (28, 476, 150, 24);
+    cabModeLabel.setBounds (202, 460, 150, 14);
+    cabModeBox.setBounds   (202, 476, 150, 24);
+    autoLevelButton.setBounds (W/2 - 64, 510, 128, 24);
 
     // voicing footswitch near the bottom (below the wordmark)
     footSw.setBounds (W/2 - 90, 612, 180, 100);
