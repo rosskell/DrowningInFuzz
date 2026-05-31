@@ -1,7 +1,7 @@
-# ProFuzz
+# Drowning in Fuzz
 
 A 64-bit VST3 fuzz guitar pedal plugin, built with [JUCE](https://juce.com) and C++.
-By-ear emulation of a Pro Fuzz pedal, with a few extras the original never had
+By-ear emulation of a fuzz pedal, with a few extras the original never had
 (noise gate, dry/wet mix, oversampled clipping).
 
 ## Controls
@@ -18,11 +18,11 @@ By-ear emulation of a Pro Fuzz pedal, with a few extras the original never had
 ## DSP chain
 
 ```
-input -> noise gate -> input drive -> [oversample x4] -> bias -> waveshaper
+input -> noise gate -> input drive -> [oversample x8] -> bias -> waveshaper
       -> [downsample] -> DC blocker -> tone low-pass -> output level -> dry/wet
 ```
 
-Clipping is oversampled 4x to keep aliasing out. A DC blocker removes the offset
+Clipping is oversampled 8x to keep aliasing out. A DC blocker removes the offset
 that `Bias` introduces.
 
 ## Build (Windows, Visual Studio 2022)
@@ -35,9 +35,8 @@ cmake -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-The VST3 is built to `build/ProFuzz_artefacts/Release/VST3/ProFuzz.vst3` and
-(because `COPY_PLUGIN_AFTER_BUILD` is on) copied to your system VST3 folder
-(`%COMMONPROGRAMFILES%\VST3`).
+The VST3 is built to
+`build/DrowningInFuzz_artefacts/Release/VST3/Drowning in Fuzz.vst3`.
 
 ## Tuning the tone by ear
 

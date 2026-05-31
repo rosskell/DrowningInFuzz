@@ -3,11 +3,10 @@
 #include <JuceHeader.h>
 
 //==============================================================================
-// ProFuzz — emulation of the GFS Electronics "Pro Fuzz Classic", a Big Muff Pi
-// style fuzz. Authentic 4-stage Big Muff topology:
+// Drowning in Fuzz -- Big Muff Pi style fuzz. Authentic 4-stage topology:
 //
 //   input HPF (coupling cap) -> input boost (Fuzz knob)
-//     -> [ oversample x4 ]
+//     -> [ oversample x8 ]
 //        -> soft-clip stage 1 -> inter-stage LPF
 //        -> soft-clip stage 2 -> inter-stage LPF
 //     -> [ downsample ]

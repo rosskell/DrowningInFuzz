@@ -113,25 +113,8 @@ void FootSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down)
     const float cx = b.getCentreX();
     const bool  on = getToggleState();   // Mk II engaged
 
-    // --- LED above the switch ---
-    const float ledY = b.getY() + 14.0f;
-    const float lr = 7.0f;
-    if (on)
-    {
-        juce::ColourGradient glow (juce::Colour (0xffff5a4a).withAlpha (0.55f), cx, ledY,
-                                   juce::Colours::transparentBlack, cx, ledY + 22.0f, true);
-        g.setGradientFill (glow);
-        g.fillEllipse (cx - 22.0f, ledY - 22.0f, 44.0f, 44.0f);
-    }
-    g.setColour (juce::Colours::black.withAlpha (0.6f));
-    g.fillEllipse (cx - lr - 1.5f, ledY - lr - 1.5f, (lr + 1.5f) * 2.0f, (lr + 1.5f) * 2.0f);
-    g.setColour (on ? juce::Colour (0xffff3b30) : juce::Colour (0xff5a1410));
-    g.fillEllipse (cx - lr, ledY - lr, lr * 2.0f, lr * 2.0f);
-    g.setColour (juce::Colours::white.withAlpha (on ? 0.8f : 0.2f)); // hot-spot
-    g.fillEllipse (cx - lr * 0.4f, ledY - lr * 0.6f, lr * 0.6f, lr * 0.6f);
-
     // --- chrome stomp button ---
-    const float sy = b.getY() + 56.0f;
+    const float sy = b.getY() + 38.0f;
     const float sr = 24.0f;
     const float press = down ? 1.5f : 0.0f;
 
@@ -167,7 +150,7 @@ ProFuzzAudioProcessorEditor::ProFuzzAudioProcessorEditor (ProFuzzAudioProcessor&
 {
     setLookAndFeel (&laf);
 
-    // The three real Pro Fuzz controls (big knobs).
+    // The three core fuzz controls (big knobs).
     setupKnob (level, "level", "MASTER", true);
     setupKnob (tone,  "tone",  "TONE",   true);
     setupKnob (drive, "drive", "FUZZ",   true);
@@ -310,10 +293,10 @@ void ProFuzzAudioProcessorEditor::paint (juce::Graphics& g)
         }
     }
 
-    // GFS ELECTRONICS (faded/tarnished gold)
+    // RAD ELECTRONICS (faded/tarnished gold)
     g.setColour (PF::goldDull);
     g.setFont (juce::Font (22.0f, juce::Font::bold));
-    g.drawText ("GFS", juce::Rectangle<int> (0, 14, getWidth(), 26),
+    g.drawText ("RAD", juce::Rectangle<int> (0, 14, getWidth(), 26),
                 juce::Justification::centred, false);
     g.setFont (juce::Font (10.0f, juce::Font::bold));
     g.drawText ("E L E C T R O N I C S", juce::Rectangle<int> (0, 38, getWidth(), 14),
@@ -337,10 +320,10 @@ void ProFuzzAudioProcessorEditor::paint (juce::Graphics& g)
                     juce::Justification::centred, false);
     }
 
-    // big "Pro Fuzz" wordmark + CLASSIC (slightly worn white)
+    // big wordmark + CLASSIC (slightly worn white)
     g.setColour (PF::textWorn);
-    g.setFont (juce::Font (46.0f, juce::Font::bold | juce::Font::italic));
-    g.drawText ("Pro Fuzz", juce::Rectangle<int> (0, 528, getWidth(), 52),
+    g.setFont (juce::Font (34.0f, juce::Font::bold | juce::Font::italic));
+    g.drawText ("Drowning in Fuzz", juce::Rectangle<int> (0, 528, getWidth(), 52),
                 juce::Justification::centred, false);
     g.setColour (PF::goldDull);
     g.setFont (juce::Font (16.0f, juce::Font::bold));
@@ -359,13 +342,6 @@ void ProFuzzAudioProcessorEditor::paint (juce::Graphics& g)
                         1.0f + rng.nextFloat() * 1.5f);
         }
     }
-
-    // footer (faded)
-    g.setColour (PF::goldDull.withAlpha (0.85f));
-    g.setFont (juce::Font (12.0f, juce::Font::italic));
-    g.drawText ("Pure Analog  -  True Bypass",
-                juce::Rectangle<int> (0, getHeight() - 26, getWidth(), 18),
-                juce::Justification::centred, false);
 
     // --- vignette: darkened, grimy edges (handling dirt builds at the rim) ---
     {

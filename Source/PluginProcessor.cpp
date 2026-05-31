@@ -32,7 +32,7 @@ ProFuzzAudioProcessor::createParameterLayout()
     using namespace juce;
     std::vector<std::unique_ptr<RangedAudioParameter>> params;
 
-    // --- The three real Pro Fuzz knobs ---
+    // --- The three core fuzz controls ---
 
     // Fuzz: 0..100 -> input gain into the first clip stage. The Big Muff lives
     // deep in clipping, so even moderate settings are very saturated.
@@ -91,7 +91,7 @@ ProFuzzAudioProcessor::createParameterLayout()
 
     // Voicing footswitch: false = Mk I (the original bright voice you dialed in),
     // true = Mk II (re-tuned by spectral match to sound closer to the real pedal:
-    // darker top, tighter lows, fuller mids). LED lit = Mk II.
+    // darker top, tighter lows, fuller mids).
     params.push_back (std::make_unique<AudioParameterBool>(
         ParameterID { ParamID::voicing, 1 }, "Voicing (Mk II)", false));
 

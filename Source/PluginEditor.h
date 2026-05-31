@@ -4,7 +4,7 @@
 #include "PluginProcessor.h"
 
 //==============================================================================
-// Cream/ivory rotary knob styled after the physical GFS Pro Fuzz Classic knobs:
+// Cream/ivory rotary knob styled after physical pedal knobs:
 // a round ivory cap with a pointer notch, sitting on a dark base ring.
 class ProFuzzLookAndFeel : public juce::LookAndFeel_V4
 {
@@ -16,8 +16,8 @@ public:
 };
 
 //==============================================================================
-// Chrome stomp footswitch with an LED above it. Toggle ON = Mk II voicing
-// (LED lit). Attached to the "voicing" parameter so host automation stays in
+// Chrome stomp footswitch. Toggle ON = Mk II voicing. Attached to the
+// "voicing" parameter so host automation stays in
 // sync; repaints on every state change (no timer needed).
 class FootSwitch : public juce::Button
 {
