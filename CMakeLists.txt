@@ -54,3 +54,39 @@ target_link_libraries(DrowningInFuzz
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
+
+# ---------------------------------------------------------------------------
+# Vocal distortion plugin target
+# ---------------------------------------------------------------------------
+juce_add_plugin(DrowningInVox
+    COMPANY_NAME            "Donaldson Audio"
+    BUNDLE_ID               "me.donaldsons.drowninginvox"
+    IS_SYNTH                FALSE
+    NEEDS_MIDI_INPUT        FALSE
+    NEEDS_MIDI_OUTPUT       FALSE
+    IS_MIDI_EFFECT          FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE
+    PLUGIN_MANUFACTURER_CODE Dnld
+    PLUGIN_CODE             Dvox
+    FORMATS                 VST3
+    PRODUCT_NAME            "Drowning in Vox")
+
+juce_generate_juce_header(DrowningInVox)
+
+target_sources(DrowningInVox PRIVATE
+    SourceVox/VocalDistortionProcessor.cpp)
+
+target_compile_definitions(DrowningInVox PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0)
+
+target_link_libraries(DrowningInVox
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)

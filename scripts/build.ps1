@@ -14,9 +14,10 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $buildDir = Join-Path $repoRoot "build"
 $distDir = Join-Path $repoRoot "dist"
-$pluginName = "Drowning in Fuzz.vst3"
-$artifact = Join-Path $buildDir "DrowningInFuzz_artefacts\$Config\VST3\$pluginName"
-$distPlugin = Join-Path $distDir $pluginName
+$plugins = @(
+    @{ Target = "DrowningInFuzz"; Name = "Drowning in Fuzz.vst3" },
+    @{ Target = "DrowningInVox";  Name = "Drowning in Vox.vst3" }
+)
 
 function Find-CMake {
     $cmd = Get-Command cmake -ErrorAction SilentlyContinue
@@ -91,29 +92,35 @@ try {
     Write-Host "Building $Config..."
     Invoke-BuildCommand "`"$cmake`" --build `"$buildDir`" --config $Config"
 
-    if (-not (Test-Path $artifact)) {
-        throw "Built VST3 was not found at $artifact"
-    }
-
-    if (-not $SkipDist) {
-        New-Item -ItemType Directory -Path $distDir -Force | Out-Null
-        Copy-Item -Path $artifact -Destination $distDir -Recurse -Force
-        Write-Host "Updated dist package: $distPlugin"
-    }
-
-    if (-not $SkipInstall) {
-        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-
-        if ($CleanOldProFuzz) {
-            $oldPlugin = Join-Path $InstallDir "ProFuzz.vst3"
-            if (Test-Path $oldPlugin) {
-                Remove-Item -LiteralPath $oldPlugin -Recurse -Force
-                Write-Host "Removed old plugin: $oldPlugin"
-            }
+    foreach ($plugin in $plugins) {
+        $artifact = Join-Path $buildDir "$($plugin.Target)_artefacts\$Config\VST3\$($plugin.Name)"
+        if (-not (Test-Path $artifact)) {
+            throw "Built VST3 was not found at $artifact"
         }
 
-        Copy-Item -Path $artifact -Destination $InstallDir -Recurse -Force
-        Write-Host "Installed VST3: $(Join-Path $InstallDir $pluginName)"
+        if (-not $SkipDist) {
+            New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+            Copy-Item -Path $artifact -Destination $distDir -Recurse -Force
+            Write-Host "Updated dist package: $(Join-Path $distDir $plugin.Name)"
+        }
+
+        if (-not $SkipInstall) {
+            New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+            try {
+                Copy-Item -Path $artifact -Destination $InstallDir -Recurse -Force
+                Write-Host "Installed VST3: $(Join-Path $InstallDir $plugin.Name)"
+            } catch {
+                Write-Warning "Could not install $($plugin.Name). Close REAPER or any host using it, then rerun this script. $($_.Exception.Message)"
+            }
+        }
+    }
+
+    if ((-not $SkipInstall) -and $CleanOldProFuzz) {
+        $oldPlugin = Join-Path $InstallDir "ProFuzz.vst3"
+        if (Test-Path $oldPlugin) {
+            Remove-Item -LiteralPath $oldPlugin -Recurse -Force
+            Write-Host "Removed old plugin: $oldPlugin"
+        }
     }
 } finally {
     Pop-Location
