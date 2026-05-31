@@ -1,4 +1,5 @@
 #include "VocalDistortionProcessor.h"
+#include "VocalDistortionEditor.h"
 
 namespace VoxParam
 {
@@ -293,7 +294,7 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
 
 juce::AudioProcessorEditor* DrowningInVoxAudioProcessor::createEditor()
 {
-    return new juce::GenericAudioProcessorEditor (*this);
+    return new DrowningInVoxAudioProcessorEditor (*this);
 }
 
 void DrowningInVoxAudioProcessor::getStateInformation (juce::MemoryBlock& destData)

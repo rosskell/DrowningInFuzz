@@ -75,7 +75,8 @@ juce_add_plugin(DrowningInVox
 juce_generate_juce_header(DrowningInVox)
 
 target_sources(DrowningInVox PRIVATE
-    SourceVox/VocalDistortionProcessor.cpp)
+    SourceVox/VocalDistortionProcessor.cpp
+    SourceVox/VocalDistortionEditor.cpp)
 
 target_compile_definitions(DrowningInVox PUBLIC
     JUCE_WEB_BROWSER=0
