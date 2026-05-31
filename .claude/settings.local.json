@@ -82,7 +82,11 @@
       "Bash(rm -f mk2.py mk2_result.txt tune_mk2.py match_mp3.py BR_*.txt t.out t.err)",
       "Bash(sed -n '63,66p' Source/PluginProcessor.h)",
       "Bash(grep -c \"error C\\\\|error LNK\" b.log)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(echo \"remote: $\\(git ls-remote origin main 2>&1)",
+      "Bash(git --no-pager log --oneline -3)",
+      "Bash(awk '{print \"build:\",$6}')",
+      "Bash(rm -f mk2.py mk2_result.txt tune_mk2.py match_mp3.py BR_*.txt)"
     ]
   }
 }
