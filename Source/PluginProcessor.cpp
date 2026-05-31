@@ -222,6 +222,8 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
     // Apply the current voicing's cutoffs (overrides the Mk I defaults above).
     osRateHz    = osRate;
     lastVoicing = -1;
+    lastBloatDb = std::numeric_limits<float>::quiet_NaN();
+    lastCapLeakHz = std::numeric_limits<float>::quiet_NaN();
     applyVoicing ((int) apvts.getRawParameterValue (ParamID::voicing)->load());
 
     gateGain.fill (1.0f);
@@ -336,13 +338,25 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     }
     biasAmt.setTargetValue ((baseBias + biasExtra) * 0.5f);
 
-    for (auto& f : bloatShelf)
-        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowShelf (
-            currentSampleRate, 180.0f, 0.7f, juce::Decibels::decibelsToGain (bloatDb));
+    // These filters are part of the anti-motorboating design: they shape the
+    // "dying" modes without injecting energy into silence. Rebuild their
+    // coefficient objects only when the effective control-rate values change;
+    // doing it every block is needless audio-thread churn.
+    if (std::isnan (lastBloatDb) || std::abs (bloatDb - lastBloatDb) >= 0.05f)
+    {
+        lastBloatDb = bloatDb;
+        for (auto& f : bloatShelf)
+            f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowShelf (
+                currentSampleRate, 180.0f, 0.7f, juce::Decibels::decibelsToGain (bloatDb));
+    }
 
-    for (auto& f : capLeakLPF)
-        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (
-            currentSampleRate, capLeakHz);
+    if (std::isnan (lastCapLeakHz) || std::abs (capLeakHz - lastCapLeakHz) >= 5.0f)
+    {
+        lastCapLeakHz = capLeakHz;
+        for (auto& f : capLeakLPF)
+            f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (
+                currentSampleRate, capLeakHz);
+    }
 
     const float gateThrDb = apvts.getRawParameterValue (ParamID::gate)->load();
     const float gateThr   = juce::Decibels::decibelsToGain (gateThrDb);

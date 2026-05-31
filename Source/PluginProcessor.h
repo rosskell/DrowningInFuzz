@@ -103,6 +103,8 @@ private:
     double currentSampleRate = 44100.0;
     double osRateHz          = 44100.0 * 8.0; // oversampled rate (for voicing)
     int    lastVoicing       = -1;            // forces filter refresh on change
+    float  lastBloatDb       = std::numeric_limits<float>::quiet_NaN();
+    float  lastCapLeakHz     = std::numeric_limits<float>::quiet_NaN();
 
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
 
