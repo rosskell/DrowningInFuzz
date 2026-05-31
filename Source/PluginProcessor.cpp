@@ -16,6 +16,43 @@ namespace ParamID
     constexpr auto voicing= "voicing"; // Mk I (orig) vs Mk II (closer to real)
 }
 
+namespace
+{
+    struct FactoryPreset
+    {
+        const char* name;
+        float drive;
+        float tone;
+        float level;
+        float bias;
+        float dying;
+        float warmth;
+        float gate;
+        float mix;
+        int dyMode;
+        bool voicing;
+    };
+
+    constexpr std::array<FactoryPreset, 8> kFactoryPresets {{
+        { "Drowning in Fuzz", 65.0f, 0.90f, -6.0f, -0.12f, 0.35f, 0.35f, -100.0f, 1.00f, 0, false },
+        { "Battery Sink",     78.0f, 0.72f, -7.5f, -0.28f, 0.72f, 0.28f,  -78.0f, 1.00f, 0, true  },
+        { "Wool Blanket",     60.0f, 0.22f, -5.0f, -0.08f, 0.82f, 0.45f, -100.0f, 1.00f, 2, true  },
+        { "Broken Speaker",   88.0f, 0.64f, -9.0f, -0.34f, 0.88f, 0.18f,  -72.0f, 1.00f, 1, false },
+        { "Tight Lead",       72.0f, 0.82f, -4.5f, -0.06f, 0.18f, 0.22f,  -68.0f, 1.00f, 1, true  },
+        { "Doom Bloom",       82.0f, 0.36f, -8.5f, -0.18f, 0.62f, 0.52f,  -92.0f, 1.00f, 0, true  },
+        { "Dry Rot Mix",      70.0f, 0.70f, -5.5f, -0.16f, 0.50f, 0.35f,  -82.0f, 0.58f, 0, false },
+        { "Mk I Bright",      58.0f, 0.96f, -6.0f,  0.00f, 0.00f, 0.12f, -100.0f, 1.00f, 0, false },
+    }};
+
+    void setParameterValue (juce::AudioProcessorValueTreeState& state,
+                            const char* id,
+                            float value)
+    {
+        if (auto* param = state.getParameter (id))
+            param->setValueNotifyingHost (param->convertTo0to1 (value));
+    }
+}
+
 //==============================================================================
 ProFuzzAudioProcessor::ProFuzzAudioProcessor()
     : AudioProcessor (BusesProperties()
@@ -96,6 +133,45 @@ ProFuzzAudioProcessor::createParameterLayout()
         ParameterID { ParamID::voicing, 1 }, "Voicing (Mk II)", false));
 
     return { params.begin(), params.end() };
+}
+
+//==============================================================================
+int ProFuzzAudioProcessor::getNumPrograms()
+{
+    return (int) kFactoryPresets.size();
+}
+
+int ProFuzzAudioProcessor::getCurrentProgram()
+{
+    return currentProgram;
+}
+
+void ProFuzzAudioProcessor::setCurrentProgram (int index)
+{
+    if (! juce::isPositiveAndBelow (index, (int) kFactoryPresets.size()))
+        return;
+
+    currentProgram = index;
+    const auto& p = kFactoryPresets[(size_t) index];
+
+    setParameterValue (apvts, ParamID::drive,   p.drive);
+    setParameterValue (apvts, ParamID::tone,    p.tone);
+    setParameterValue (apvts, ParamID::level,   p.level);
+    setParameterValue (apvts, ParamID::bias,    p.bias);
+    setParameterValue (apvts, ParamID::dying,   p.dying);
+    setParameterValue (apvts, ParamID::dymode,  (float) p.dyMode);
+    setParameterValue (apvts, ParamID::warmth,  p.warmth);
+    setParameterValue (apvts, ParamID::gate,    p.gate);
+    setParameterValue (apvts, ParamID::mix,     p.mix);
+    setParameterValue (apvts, ParamID::voicing, p.voicing ? 1.0f : 0.0f);
+}
+
+const juce::String ProFuzzAudioProcessor::getProgramName (int index)
+{
+    if (juce::isPositiveAndBelow (index, (int) kFactoryPresets.size()))
+        return kFactoryPresets[(size_t) index].name;
+
+    return {};
 }
 
 //==============================================================================

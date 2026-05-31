@@ -107,41 +107,45 @@ void ProFuzzLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int 
 }
 
 //==============================================================================
-void FootSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down)
+void VoicingSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down)
 {
-    auto b = getLocalBounds().toFloat();
-    const float cx = b.getCentreX();
-    const bool  on = getToggleState();   // Mk II engaged
-
-    // --- chrome stomp button ---
-    const float sy = b.getY() + 38.0f;
-    const float sr = 24.0f;
-    const float press = down ? 1.5f : 0.0f;
-
-    g.setColour (juce::Colours::black.withAlpha (0.45f));
-    g.fillEllipse (cx - sr - 3.0f, sy - sr - 1.0f + press, (sr + 3.0f) * 2.0f, (sr + 3.0f) * 2.0f);
-
-    juce::ColourGradient chrome (juce::Colour (0xffe9ecf2), cx, sy - sr + press,
-                                 juce::Colour (0xff7c8090), cx, sy + sr + press, false);
-    chrome.addColour (0.5, juce::Colour (0xffb9bfcc));
-    g.setGradientFill (chrome);
-    g.fillEllipse (cx - sr, sy - sr + press, sr * 2.0f, sr * 2.0f);
-
-    g.setColour (juce::Colours::white.withAlpha (highlighted ? 0.5f : 0.3f));
-    g.drawEllipse (cx - sr + 2.0f, sy - sr + 2.0f + press, sr * 2.0f - 4.0f, sr * 2.0f - 4.0f, 1.5f);
-    g.setColour (juce::Colours::black.withAlpha (0.25f));
-    g.fillEllipse (cx - sr * 0.45f, sy - sr * 0.45f + press, sr * 0.9f, sr * 0.9f);
-
-    // --- Mk I / Mk II labels flanking the stomp; active one lit ---
+    const auto b = getLocalBounds().toFloat();
+    const bool on = getToggleState();   // Mk II engaged
     const juce::Colour gold { 0xffe8c860 };
     const juce::Colour dim  { 0xff7a7488 };
+    const auto track = b.withSizeKeepingCentre (150.0f, 38.0f);
+    auto halves = track;
+    const auto left = halves.removeFromLeft (halves.getWidth() * 0.5f);
+    const auto right = halves;
+    const auto active = on ? right : left;
+
+    g.setColour (juce::Colours::black.withAlpha (0.34f));
+    g.fillRoundedRectangle (track.translated (0.0f, 2.0f), 8.0f);
+
+    g.setColour (PF::darkRing.withAlpha (0.88f));
+    g.fillRoundedRectangle (track, 8.0f);
+
+    g.setColour (gold.withAlpha (0.55f));
+    g.drawRoundedRectangle (track.reduced (0.5f), 8.0f, 1.0f);
+
+    juce::ColourGradient activeGrad (gold.withAlpha (down ? 0.90f : 0.78f),
+                                     active.getX(), active.getY(),
+                                     PF::goldDull.withAlpha (down ? 0.74f : 0.62f),
+                                     active.getX(), active.getBottom(), false);
+    g.setGradientFill (activeGrad);
+    g.fillRoundedRectangle (active.reduced (3.0f), 6.0f);
+
+    if (highlighted)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.14f));
+        g.drawRoundedRectangle (track.reduced (2.0f), 7.0f, 1.2f);
+    }
+
     g.setFont (juce::Font (13.0f, juce::Font::bold));
-    g.setColour (on ? dim : gold);
-    g.drawText ("Mk I",  juce::Rectangle<float> (b.getX(), sy - 10.0f, cx - sr - b.getX() - 4.0f, 20.0f),
-                juce::Justification::centredRight, false);
-    g.setColour (on ? gold : dim);
-    g.drawText ("Mk II", juce::Rectangle<float> (cx + sr + 4.0f, sy - 10.0f, b.getRight() - (cx + sr) - 4.0f, 20.0f),
-                juce::Justification::centredLeft, false);
+    g.setColour (on ? dim : PF::darkRing);
+    g.drawText ("Mk I", left, juce::Justification::centred, false);
+    g.setColour (on ? PF::darkRing : dim);
+    g.drawText ("Mk II", right, juce::Justification::centred, false);
 }
 
 //==============================================================================

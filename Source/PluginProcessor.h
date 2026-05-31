@@ -45,10 +45,10 @@ public:
     double getTailLengthSeconds() const override { return 0.0; }
 
     //==========================================================================
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram (int) override;
+    const juce::String getProgramName (int) override;
     void changeProgramName (int, const juce::String&) override {}
 
     //==========================================================================
@@ -103,6 +103,7 @@ private:
     double currentSampleRate = 44100.0;
     double osRateHz          = 44100.0 * 8.0; // oversampled rate (for voicing)
     int    lastVoicing       = -1;            // forces filter refresh on change
+    int    currentProgram    = 0;
     float  lastBloatDb       = std::numeric_limits<float>::quiet_NaN();
     float  lastCapLeakHz     = std::numeric_limits<float>::quiet_NaN();
 

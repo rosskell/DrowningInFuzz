@@ -38,6 +38,20 @@ cmake --build build --config Release
 The VST3 is built to
 `build/DrowningInFuzz_artefacts/Release/VST3/Drowning in Fuzz.vst3`.
 
+For day-to-day REAPER testing, use:
+
+```powershell
+.\scripts\build.ps1
+```
+
+That builds Release, refreshes `dist/Drowning in Fuzz.vst3`, and installs a copy
+to your per-user VST3 folder. Add this folder to REAPER's VST scan paths if it
+is not already there:
+
+```text
+%LOCALAPPDATA%\Programs\Common\VST3
+```
+
 ## Tuning the tone by ear
 
 Everything lives in `Source/PluginProcessor.cpp`:

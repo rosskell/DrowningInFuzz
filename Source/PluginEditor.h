@@ -16,13 +16,13 @@ public:
 };
 
 //==============================================================================
-// Chrome stomp footswitch. Toggle ON = Mk II voicing. Attached to the
-// "voicing" parameter so host automation stays in
-// sync; repaints on every state change (no timer needed).
-class FootSwitch : public juce::Button
+// Two-position voicing selector. Toggle ON = Mk II voicing. Attached to the
+// "voicing" parameter so host automation stays in sync; repaints on every
+// state change (no timer needed).
+class VoicingSwitch : public juce::Button
 {
 public:
-    FootSwitch() : juce::Button ("voicing") { setClickingTogglesState (true); }
+    VoicingSwitch() : juce::Button ("voicing") { setClickingTogglesState (true); }
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
 };
 
@@ -61,9 +61,9 @@ private:
     juce::Label    dyModeLabel;
     std::unique_ptr<ComboAttachment> dyModeAttach;
 
-    // Mk I / Mk II voicing footswitch + LED.
+    // Mk I / Mk II voicing selector.
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
-    FootSwitch footSw;
+    VoicingSwitch footSw;
     std::unique_ptr<ButtonAttachment> footAttach;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProFuzzAudioProcessorEditor)
