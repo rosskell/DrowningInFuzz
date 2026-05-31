@@ -107,6 +107,61 @@ void ProFuzzLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int 
 }
 
 //==============================================================================
+void FootSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down)
+{
+    auto b = getLocalBounds().toFloat();
+    const float cx = b.getCentreX();
+    const bool  on = getToggleState();   // Mk II engaged
+
+    // --- LED above the switch ---
+    const float ledY = b.getY() + 14.0f;
+    const float lr = 7.0f;
+    if (on)
+    {
+        juce::ColourGradient glow (juce::Colour (0xffff5a4a).withAlpha (0.55f), cx, ledY,
+                                   juce::Colours::transparentBlack, cx, ledY + 22.0f, true);
+        g.setGradientFill (glow);
+        g.fillEllipse (cx - 22.0f, ledY - 22.0f, 44.0f, 44.0f);
+    }
+    g.setColour (juce::Colours::black.withAlpha (0.6f));
+    g.fillEllipse (cx - lr - 1.5f, ledY - lr - 1.5f, (lr + 1.5f) * 2.0f, (lr + 1.5f) * 2.0f);
+    g.setColour (on ? juce::Colour (0xffff3b30) : juce::Colour (0xff5a1410));
+    g.fillEllipse (cx - lr, ledY - lr, lr * 2.0f, lr * 2.0f);
+    g.setColour (juce::Colours::white.withAlpha (on ? 0.8f : 0.2f)); // hot-spot
+    g.fillEllipse (cx - lr * 0.4f, ledY - lr * 0.6f, lr * 0.6f, lr * 0.6f);
+
+    // --- chrome stomp button ---
+    const float sy = b.getY() + 56.0f;
+    const float sr = 24.0f;
+    const float press = down ? 1.5f : 0.0f;
+
+    g.setColour (juce::Colours::black.withAlpha (0.45f));
+    g.fillEllipse (cx - sr - 3.0f, sy - sr - 1.0f + press, (sr + 3.0f) * 2.0f, (sr + 3.0f) * 2.0f);
+
+    juce::ColourGradient chrome (juce::Colour (0xffe9ecf2), cx, sy - sr + press,
+                                 juce::Colour (0xff7c8090), cx, sy + sr + press, false);
+    chrome.addColour (0.5, juce::Colour (0xffb9bfcc));
+    g.setGradientFill (chrome);
+    g.fillEllipse (cx - sr, sy - sr + press, sr * 2.0f, sr * 2.0f);
+
+    g.setColour (juce::Colours::white.withAlpha (highlighted ? 0.5f : 0.3f));
+    g.drawEllipse (cx - sr + 2.0f, sy - sr + 2.0f + press, sr * 2.0f - 4.0f, sr * 2.0f - 4.0f, 1.5f);
+    g.setColour (juce::Colours::black.withAlpha (0.25f));
+    g.fillEllipse (cx - sr * 0.45f, sy - sr * 0.45f + press, sr * 0.9f, sr * 0.9f);
+
+    // --- Mk I / Mk II labels flanking the stomp; active one lit ---
+    const juce::Colour gold { 0xffe8c860 };
+    const juce::Colour dim  { 0xff7a7488 };
+    g.setFont (juce::Font (13.0f, juce::Font::bold));
+    g.setColour (on ? dim : gold);
+    g.drawText ("Mk I",  juce::Rectangle<float> (b.getX(), sy - 10.0f, cx - sr - b.getX() - 4.0f, 20.0f),
+                juce::Justification::centredRight, false);
+    g.setColour (on ? gold : dim);
+    g.drawText ("Mk II", juce::Rectangle<float> (cx + sr + 4.0f, sy - 10.0f, b.getRight() - (cx + sr) - 4.0f, 20.0f),
+                juce::Justification::centredLeft, false);
+}
+
+//==============================================================================
 ProFuzzAudioProcessorEditor::ProFuzzAudioProcessorEditor (ProFuzzAudioProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
@@ -139,7 +194,11 @@ ProFuzzAudioProcessorEditor::ProFuzzAudioProcessorEditor (ProFuzzAudioProcessor&
     dyModeLabel.setColour (juce::Label::textColourId, PF::textWorn);
     addAndMakeVisible (dyModeLabel);
 
-    setSize (380, 660);
+    // Mk I / Mk II voicing footswitch.
+    addAndMakeVisible (footSw);
+    footAttach = std::make_unique<ButtonAttachment> (processor.apvts, "voicing", footSw);
+
+    setSize (380, 740);
 }
 
 ProFuzzAudioProcessorEditor::~ProFuzzAudioProcessorEditor()
@@ -356,4 +415,7 @@ void ProFuzzAudioProcessorEditor::resized()
     // dying-mode selector centered below the extras
     dyModeLabel.setBounds (W/2 - 90, 432, 180, 14);
     dyModeBox.setBounds   (W/2 - 80, 448, 160, 24);
+
+    // voicing footswitch near the bottom (above the wordmark)
+    footSw.setBounds (W/2 - 90, 596, 180, 100);
 }

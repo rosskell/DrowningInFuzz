@@ -13,6 +13,7 @@ namespace ParamID
     constexpr auto warmth = "warmth";  // tube/valve warmth (extra)
     constexpr auto gate   = "gate";    // input noise gate (extra)
     constexpr auto mix    = "mix";     // dry/wet (extra)
+    constexpr auto voicing= "voicing"; // Mk I (orig) vs Mk II (closer to real)
 }
 
 //==============================================================================
@@ -87,6 +88,12 @@ ProFuzzAudioProcessor::createParameterLayout()
     params.push_back (std::make_unique<AudioParameterFloat>(
         ParameterID { ParamID::mix, 1 }, "Mix",
         NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
+
+    // Voicing footswitch: false = Mk I (the original bright voice you dialed in),
+    // true = Mk II (re-tuned by spectral match to sound closer to the real pedal:
+    // darker top, tighter lows, fuller mids). LED lit = Mk II.
+    params.push_back (std::make_unique<AudioParameterBool>(
+        ParameterID { ParamID::voicing, 1 }, "Voicing (Mk II)", false));
 
     return { params.begin(), params.end() };
 }
@@ -212,6 +219,11 @@ void ProFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
         f.reset();
     }
 
+    // Apply the current voicing's cutoffs (overrides the Mk I defaults above).
+    osRateHz    = osRate;
+    lastVoicing = -1;
+    applyVoicing ((int) apvts.getRawParameterValue (ParamID::voicing)->load());
+
     gateGain.fill (1.0f);
     sputterEnv.fill (0.0f);
 
@@ -231,6 +243,34 @@ void ProFuzzAudioProcessor::releaseResources()
 {
     if (oversampling != nullptr)
         oversampling->reset();
+}
+
+//==============================================================================
+void ProFuzzAudioProcessor::applyVoicing (int v)
+{
+    if (v == lastVoicing)
+        return;
+    lastVoicing = v;
+
+    // Mk II values came from a spectral match of the DI rendered through the
+    // chain against the real-pedal recording: the real pedal is much darker up
+    // top and tighter in the lows than Mk I, with less mid scoop.
+    const float inHz  = (v == 1) ?    85.0f :    45.0f; // input coupling HPF
+    const float lp1Hz = (v == 1) ?  6000.0f : 18000.0f; // inter-stage LPF 1
+    const float lp2Hz = (v == 1) ?  4000.0f : 15000.0f; // inter-stage LPF 2
+    const float tLpHz = (v == 1) ?  1200.0f :   800.0f; // tone low path (more body)
+    const float tHpHz = (v == 1) ?  1500.0f :  2000.0f; // tone high path (less scoop)
+
+    for (auto& f : inputHPF)
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, inHz);
+    for (auto& f : interLPF1)
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (osRateHz, lp1Hz);
+    for (auto& f : interLPF2)
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (osRateHz, lp2Hz);
+    for (auto& f : toneLPF)
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, tLpHz);
+    for (auto& f : toneHPF)
+        f.coefficients = juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, tHpHz);
 }
 
 //==============================================================================
@@ -267,6 +307,9 @@ void ProFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const float dying = apvts.getRawParameterValue (ParamID::dying)->load();
     dyingAmt.setTargetValue (dying);
     warmthAmt.setTargetValue (apvts.getRawParameterValue (ParamID::warmth)->load());
+
+    // Voicing footswitch: refresh filter cutoffs only when it changes.
+    applyVoicing ((int) apvts.getRawParameterValue (ParamID::voicing)->load());
 
     const float baseBias = apvts.getRawParameterValue (ParamID::bias)->load();
     const int   dyMode   = (int) apvts.getRawParameterValue (ParamID::dymode)->load();

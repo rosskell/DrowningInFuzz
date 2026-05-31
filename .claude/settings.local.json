@@ -63,7 +63,26 @@
       "Bash(rm -f README.md.tmp_check)",
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(git ls-remote *)",
+      "Bash(echo \"remote main: $\\(git ls-remote origin main 2>&1)",
+      "Bash(ffmpeg -version)",
+      "Bash(python -c \"import soundfile; print\\('soundfile ok'\\)\")",
+      "Bash(python -c \"import librosa; print\\('librosa ok'\\)\")",
+      "Bash(python -c \"import pydub; print\\('pydub ok'\\)\")",
+      "Bash(python -c \"import imageio_ffmpeg; print\\('imageio_ffmpeg', imageio_ffmpeg.get_ffmpeg_exe\\(\\)\\)\")",
+      "Bash(python -c \"import soundfile as sf; x,sr=sf.read\\('gtr_real_fuzz.mp3'\\); print\\('OK sr',sr,'len',len\\(x\\),'shape',x.shape\\)\")",
+      "Bash(python match_mp3.py)",
+      "Bash(python tune_mk2.py)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(rm -f t.out t.err)",
+      "Bash(rm -f mk2.py mk2_result.txt tune_mk2.py match_mp3.py BR_*.txt t.out t.err)",
+      "Bash(sed -n '63,66p' Source/PluginProcessor.h)",
+      "Bash(grep -c \"error C\\\\|error LNK\" b.log)",
+      "Read(//tmp/**)"
     ]
   }
 }

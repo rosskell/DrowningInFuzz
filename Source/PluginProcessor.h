@@ -63,6 +63,11 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
+    // Set the voicing-dependent filter cutoffs. v=0 -> Mk I (original voice,
+    // bright/open), v=1 -> Mk II (tuned closer to the real pedal: darker top,
+    // tighter lows, fuller mids). Safe to call from the audio thread.
+    void applyVoicing (int v);
+
     //==========================================================================
     // Big Muff clipping stage: a transistor gain cell swinging into a pair of
     // clipping diodes. Soft asymmetric clip.
@@ -97,6 +102,8 @@ private:
 
     // --- DSP state ---
     double currentSampleRate = 44100.0;
+    double osRateHz          = 44100.0 * 8.0; // oversampled rate (for voicing)
+    int    lastVoicing       = -1;            // forces filter refresh on change
 
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
 
