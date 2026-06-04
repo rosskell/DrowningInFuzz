@@ -315,16 +315,18 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
     // --- VU meter: average the output magnitude across channels, apply VU-style
     //     ballistics (~300 ms), publish to the editor. ---
     {
-        double sum = 0.0;
+        double sumSq = 0.0;
         for (int ch = 0; ch < numCh; ++ch)
         {
             const auto* x = buffer.getReadPointer (ch);
             for (int n = 0; n < numSamples; ++n)
-                sum += std::abs (x[n]);
+                sumSq += (double) x[n] * x[n];
         }
-        const float avg = numCh > 0 ? (float) (sum / (numCh * juce::jmax (1, numSamples))) : 0.0f;
+        const int total = numCh * juce::jmax (1, numSamples);
+        const float rms = total > 0 ? std::sqrt ((float) (sumSq / total)) : 0.0f;
+        // 300 ms VU ballistics on the linear RMS; editor maps to the dial scale.
         const float coeff = 1.0f - std::exp (-(float) numSamples / (0.30f * (float) currentSampleRate));
-        vuMeter += coeff * (avg - vuMeter);
+        vuMeter += coeff * (rms - vuMeter);
         vuLinear.store (vuMeter, std::memory_order_relaxed);
     }
 }
