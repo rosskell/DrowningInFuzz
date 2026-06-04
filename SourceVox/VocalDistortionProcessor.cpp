@@ -189,14 +189,6 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
     inputGain.setTargetValue (juce::Decibels::decibelsToGain (inputDb));
     driveGain.setTargetValue (juce::Decibels::decibelsToGain (driveDb));
     outputGain.setTargetValue (juce::Decibels::decibelsToGain (outputDb));
-
-    // Auto makeup: the soft clipper compresses peaks as Drive rises, so loudness
-    // would otherwise jump. Counter it with gain ~ inverse of the drive, scaled
-    // back (0.7) because saturation also adds level. Off => unity (1.0).
-    const float makeup = autoLevel
-        ? std::pow (juce::Decibels::decibelsToGain (-driveDb), 0.7f)
-        : 1.0f;
-    autoMakeup.setTargetValue (makeup);
     mixAmt.setTargetValue (mix);
     compAmt.setTargetValue (comp);
 
@@ -229,6 +221,16 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
     }
 
     dryBuffer.makeCopyOf (buffer, true);
+
+    // Dry RMS (post input-gain, pre-distortion) — reference for auto level.
+    double drySq = 0.0;
+    for (int ch = 0; ch < numCh; ++ch)
+    {
+        const auto* x = buffer.getReadPointer (ch);
+        for (int n = 0; n < numSamples; ++n)
+            drySq += (double) x[n] * x[n];
+    }
+    const float dryRms = numSamples > 0 ? std::sqrt ((float) (drySq / (numCh * numSamples))) : 0.0f;
 
     const float gateThr = juce::Decibels::decibelsToGain (gateDb);
     const float gateRelease = 0.9992f;
@@ -290,6 +292,24 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
         compEnv[(size_t) ch] = env;
     }
     compAmt.skip (numSamples);
+
+    // --- Auto level: match the processed (wet) loudness to the dry reference, so
+    //     sweeping Mix doesn't change perceived level. Closed-loop = correct
+    //     regardless of how much the saturator compressed. Off => unity. ---
+    {
+        double wetSq = 0.0;
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            const auto* x = buffer.getReadPointer (ch);
+            for (int n = 0; n < numSamples; ++n)
+                wetSq += (double) x[n] * x[n];
+        }
+        const float wetRms = numSamples > 0 ? std::sqrt ((float) (wetSq / (numCh * numSamples))) : 0.0f;
+        float target = 1.0f;
+        if (autoLevel && wetRms > 1.0e-5f && dryRms > 1.0e-5f)
+            target = juce::jlimit (0.25f, 4.0f, dryRms / wetRms); // +/-12 dB cap
+        autoMakeup.setTargetValue (target);
+    }
 
     for (int ch = 0; ch < numCh; ++ch)
     {
