@@ -142,7 +142,9 @@ void DrowningInVoxAudioProcessor::prepareToPlay (double sampleRate, int samplesP
     biasAmt.reset (sampleRate * 4.0, ramp);
     foldAmt.reset (sampleRate * 4.0, ramp);
     compAmt.reset (sampleRate, ramp);
-    autoMakeup.reset (sampleRate, 0.05);
+    autoMakeup.reset (sampleRate, 0.15);
+    dryEnvSq = 0.0;
+    wetEnvSq = 0.0;
     vuMeter = 0.0f;
     vuLinear.store (0.0f);
 
@@ -222,7 +224,7 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
 
     dryBuffer.makeCopyOf (buffer, true);
 
-    // Dry RMS (post input-gain, pre-distortion) — reference for auto level.
+    // Dry mean-square (post input-gain, pre-distortion) — reference for auto level.
     double drySq = 0.0;
     for (int ch = 0; ch < numCh; ++ch)
     {
@@ -230,7 +232,7 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
         for (int n = 0; n < numSamples; ++n)
             drySq += (double) x[n] * x[n];
     }
-    const float dryRms = numSamples > 0 ? std::sqrt ((float) (drySq / (numCh * numSamples))) : 0.0f;
+    const double dryMS = numSamples > 0 ? drySq / (numCh * numSamples) : 0.0;
 
     const float gateThr = juce::Decibels::decibelsToGain (gateDb);
     const float gateRelease = 0.9992f;
@@ -293,9 +295,10 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
     }
     compAmt.skip (numSamples);
 
-    // --- Auto level: match the processed (wet) loudness to the dry reference, so
-    //     sweeping Mix doesn't change perceived level. Closed-loop = correct
-    //     regardless of how much the saturator compressed. Off => unity. ---
+    // --- Auto level: match processed (wet) loudness to the dry reference so
+    //     sweeping Mix doesn't change perceived level. Closed-loop. Both dry and
+    //     wet are integrated into SLOW cross-block envelopes (~400 ms) before the
+    //     ratio is taken -- per-block RMS swings too much and pumps. Off => 1. ---
     {
         double wetSq = 0.0;
         for (int ch = 0; ch < numCh; ++ch)
@@ -304,10 +307,20 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
             for (int n = 0; n < numSamples; ++n)
                 wetSq += (double) x[n] * x[n];
         }
-        const float wetRms = numSamples > 0 ? std::sqrt ((float) (wetSq / (numCh * numSamples))) : 0.0f;
+        const double wetMS = numSamples > 0 ? wetSq / (numCh * numSamples) : 0.0;
+
+        // One-pole integrate in the mean-square domain, ~400 ms time constant.
+        const double tau = 0.40;
+        const double a = 1.0 - std::exp (-(double) numSamples / (tau * currentSampleRate));
+        dryEnvSq += a * (dryMS - dryEnvSq);
+        wetEnvSq += a * (wetMS - wetEnvSq);
+
         float target = 1.0f;
-        if (autoLevel && wetRms > 1.0e-5f && dryRms > 1.0e-5f)
-            target = juce::jlimit (0.25f, 4.0f, dryRms / wetRms); // +/-12 dB cap
+        // Only adapt when there's real signal; below the floor, hold unity so a
+        // gap doesn't make the gain run away and slam the next note.
+        if (autoLevel && wetEnvSq > 1.0e-8 && dryEnvSq > 1.0e-8)
+            target = juce::jlimit (0.25f, 4.0f,
+                                   (float) std::sqrt (dryEnvSq / wetEnvSq)); // +/-12 dB
         autoMakeup.setTargetValue (target);
     }
 
@@ -320,12 +333,16 @@ void DrowningInVoxAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
         auto am = autoMakeup;
         for (int n = 0; n < numSamples; ++n)
         {
-            float s = wet[n] * am.getNextValue() * og.getNextValue();
+            // Auto-makeup brings wet to dry loudness; THEN crossfade with dry;
+            // THEN apply Output as a master trim to the whole mix so sweeping
+            // Mix never changes level. DC-block the wet before mixing.
+            float w = wet[n] * am.getNextValue();
             if (ch < kNumCh)
-                s = outputDC[(size_t) ch].processSample (s);
-            if (! std::isfinite (s)) s = 0.0f;
+                w = outputDC[(size_t) ch].processSample (w);
             const float m = mx.getNextValue();
-            wet[n] = juce::jlimit (-1.5f, 1.5f, s) * m + dry[n] * (1.0f - m);
+            float s = (w * m + dry[n] * (1.0f - m)) * og.getNextValue();
+            if (! std::isfinite (s)) s = 0.0f;
+            wet[n] = juce::jlimit (-1.5f, 1.5f, s);
         }
     }
     outputGain.skip (numSamples);
