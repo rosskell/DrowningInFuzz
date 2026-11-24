@@ -32,7 +32,7 @@ juce_add_plugin(ProFuzz
     COPY_PLUGIN_AFTER_BUILD TRUE
     PLUGIN_MANUFACTURER_CODE Dnld
     PLUGIN_CODE             Pfzz
-    FORMATS                 VST3
+    FORMATS                 VST3 Standalone
     PRODUCT_NAME            "ProFuzz")
 
 juce_generate_juce_header(ProFuzz)
